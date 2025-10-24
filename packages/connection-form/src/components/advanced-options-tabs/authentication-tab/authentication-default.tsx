@@ -6,11 +6,13 @@ import {
   RadioBox,
   RadioBoxGroup,
   TextInput,
+  Description,
   css,
   spacing,
 } from '@mongodb-js/compass-components';
 import type ConnectionStringUrl from 'mongodb-connection-string-url';
 import type { AuthMechanism } from 'mongodb';
+import type { ConnectionOptions } from 'mongodb-data-service';
 
 import type { UpdateConnectionFormField } from '../../../hooks/use-connect-form';
 import type { ConnectionFormError } from '../../../utils/validation';
@@ -46,13 +48,20 @@ function AuthenticationDefault({
   errors,
   connectionStringUrl,
   updateConnectionFormField,
+  connectionOptions,
 }: {
   connectionStringUrl: ConnectionStringUrl;
   errors: ConnectionFormError[];
   updateConnectionFormField: UpdateConnectionFormField;
+  connectionOptions: ConnectionOptions;
 }): React.ReactElement {
   const password = getConnectionStringPassword(connectionStringUrl);
   const username = getConnectionStringUsername(connectionStringUrl);
+
+  const credentialGenerationCommand =
+    connectionOptions.credentialGeneration?.command || '';
+  const credentialGenerationTTL =
+    connectionOptions.credentialGeneration?.ttl || 3600;
 
   const selectedAuthMechanism = (
     connectionStringUrl.searchParams.get('authMechanism') ?? ''
@@ -77,6 +86,8 @@ function AuthenticationDefault({
   const usernameError = errorMessageByFieldName(errors, 'username');
   const passwordError = errorMessageByFieldName(errors, 'password');
 
+  const hasCredentialGeneration = !!credentialGenerationCommand;
+
   return (
     <>
       <FormFieldContainer>
@@ -95,6 +106,7 @@ function AuthenticationDefault({
           state={usernameError ? 'error' : undefined}
           value={username || ''}
           optional
+          disabled={hasCredentialGeneration}
         />
       </FormFieldContainer>
       <FormFieldContainer>
@@ -114,8 +126,67 @@ function AuthenticationDefault({
           errorMessage={passwordError}
           state={passwordError ? 'error' : undefined}
           optional
+          disabled={hasCredentialGeneration}
         />
       </FormFieldContainer>
+      <FormFieldContainer>
+        <Label htmlFor="credential-generation-command-input">
+          Dynamic Credential Generation Command
+        </Label>
+        <InlineInfoLink
+          aria-label="Credential Generation Documentation"
+          href="https://docs.mongodb.com/compass/current/"
+        />
+        <Description className={textInputWithLabelStyles}>
+          Shell command to generate credentials dynamically. Must output JSON
+          with &quot;username&quot; and &quot;password&quot; fields.
+        </Description>
+        <TextInput
+          className={textInputWithLabelStyles}
+          onChange={({
+            target: { value },
+          }: React.ChangeEvent<HTMLInputElement>) => {
+            updateConnectionFormField({
+              type: 'update-credential-generation-command',
+              command: value,
+            });
+          }}
+          id="credential-generation-command-input"
+          data-testid="connection-credential-generation-command-input"
+          value={credentialGenerationCommand}
+          optional
+          placeholder="e.g., ./get-mongo-credentials.sh"
+        />
+      </FormFieldContainer>
+      {hasCredentialGeneration && (
+        <FormFieldContainer>
+          <Label htmlFor="credential-generation-ttl-input">
+            Credential Cache TTL (seconds)
+          </Label>
+          <Description className={textInputWithLabelStyles}>
+            Time in seconds to cache generated credentials before regenerating.
+          </Description>
+          <TextInput
+            className={textInputWithLabelStyles}
+            onChange={({
+              target: { value },
+            }: React.ChangeEvent<HTMLInputElement>) => {
+              const ttl = parseInt(value, 10);
+              if (!isNaN(ttl) && ttl > 0) {
+                updateConnectionFormField({
+                  type: 'update-credential-generation-ttl',
+                  ttl,
+                });
+              }
+            }}
+            id="credential-generation-ttl-input"
+            data-testid="connection-credential-generation-ttl-input"
+            value={credentialGenerationTTL.toString()}
+            type="number"
+            optional
+          />
+        </FormFieldContainer>
+      )}
       <FormFieldContainer>
         <Label htmlFor="authSourceInput" id="authSourceLabel">
           Authentication Database

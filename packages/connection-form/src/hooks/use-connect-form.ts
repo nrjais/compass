@@ -29,11 +29,15 @@ import type {
   UpdateAuthMechanismAction,
   UpdatePasswordAction,
   UpdateUsernameAction,
+  UpdateCredentialGenerationCommandAction,
+  UpdateCredentialGenerationTTLAction,
 } from '../utils/authentication-handler';
 import {
   handleUpdateUsername,
   handleUpdatePassword,
   handleUpdateAuthMechanism,
+  handleUpdateCredentialGenerationCommand,
+  handleUpdateCredentialGenerationTTL,
 } from '../utils/authentication-handler';
 import type { AuthMechanismProperties } from '../utils/connection-string-helpers';
 import {
@@ -206,7 +210,9 @@ type ConnectionFormFieldActions =
   | UpdateCsfleKmsAction
   | UpdateCsfleKmsTlsAction
   | UpdateOIDCAction
-  | UpdateConnectionPersonalizationAction;
+  | UpdateConnectionPersonalizationAction
+  | UpdateCredentialGenerationCommandAction
+  | UpdateCredentialGenerationTTLAction;
 
 export type UpdateConnectionFormField = (
   action: ConnectionFormFieldActions
@@ -702,6 +708,18 @@ export function handleConnectionFormFieldUpdate(
     }
     case 'remove-csfle-kms-provider': {
       return handleRemoveKmsProvider({
+        action,
+        connectionOptions: currentConnectionOptions,
+      });
+    }
+    case 'update-credential-generation-command': {
+      return handleUpdateCredentialGenerationCommand({
+        action,
+        connectionOptions: currentConnectionOptions,
+      });
+    }
+    case 'update-credential-generation-ttl': {
+      return handleUpdateCredentialGenerationTTL({
         action,
         connectionOptions: currentConnectionOptions,
       });
