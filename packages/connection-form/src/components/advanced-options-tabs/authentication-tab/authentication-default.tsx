@@ -130,7 +130,10 @@ function AuthenticationDefault({
         />
       </FormFieldContainer>
       <FormFieldContainer>
-        <Label htmlFor="credential-generation-command-input">
+        <Label
+          htmlFor="credential-generation-command-input"
+          id="credentialGenerationCommandLabel"
+        >
           Dynamic Credential Generation Command
         </Label>
         <InlineInfoLink
@@ -152,6 +155,7 @@ function AuthenticationDefault({
             });
           }}
           id="credential-generation-command-input"
+          aria-labelledby="credentialGenerationCommandLabel"
           data-testid="connection-credential-generation-command-input"
           value={credentialGenerationCommand}
           optional
@@ -160,7 +164,10 @@ function AuthenticationDefault({
       </FormFieldContainer>
       {hasCredentialGeneration && (
         <FormFieldContainer>
-          <Label htmlFor="credential-generation-ttl-input">
+          <Label
+            htmlFor="credential-generation-ttl-input"
+            id="credentialGenerationTtlLabel"
+          >
             Credential Cache TTL (seconds)
           </Label>
           <Description className={textInputWithLabelStyles}>
@@ -180,6 +187,7 @@ function AuthenticationDefault({
               }
             }}
             id="credential-generation-ttl-input"
+            aria-labelledby="credentialGenerationTtlLabel"
             data-testid="connection-credential-generation-ttl-input"
             value={credentialGenerationTTL.toString()}
             type="number"

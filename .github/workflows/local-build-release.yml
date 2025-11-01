@@ -1,0 +1,181 @@
+# Build and release workflow for forks without Evergreen access
+# This builds on GitHub Actions instead of Evergreen
+name: Build and Release (Fork-friendly)
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+      - 'v*.*.*-beta.*'
+      - 'v*.*.*-alpha.*'
+      - 'v*.*.*-rc.*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-macos-arm64:
+    name: Build macOS Apple Silicon
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract version from tag
+        id: version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Building version: $VERSION"
+
+      - name: Verify version matches tag
+        run: |
+          PACKAGE_VERSION=$(node -p "require('./packages/compass/package.json').version")
+          TAG_VERSION="${{ steps.version.outputs.version }}"
+          echo "Package version: $PACKAGE_VERSION"
+          echo "Tag version: $TAG_VERSION"
+          if [ "$PACKAGE_VERSION" != "$TAG_VERSION" ]; then
+            echo "ERROR: Version mismatch! Package has $PACKAGE_VERSION but tag is $TAG_VERSION"
+            exit 1
+          fi
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.15.1
+          cache: 'npm'
+
+      - name: Install npm@10.2.4
+        run: npm install -g npm@10.2.4
+
+      - name: Bootstrap
+        run: npm run bootstrap
+
+      - name: Build Compass
+        env:
+          HADRON_DISTRIBUTION: compass
+        run: npm run package-compass
+
+      - name: Ad-hoc sign the DMG
+        run: |
+          echo "Finding and signing DMG files..."
+          for dmg in packages/compass/dist/*.dmg; do
+            if [ -f "$dmg" ]; then
+              echo "Processing: $dmg"
+              DMG_NAME=$(basename "$dmg")
+              TEMP_DIR=$(mktemp -d)
+
+              # Mount the original DMG
+              echo "Mounting DMG..."
+              hdiutil attach "$dmg" -nobrowse -quiet -mountpoint "$TEMP_DIR/mount"
+
+              # Copy the app to a temporary location
+              echo "Extracting app bundle..."
+              cp -R "$TEMP_DIR/mount/MongoDB Compass.app" "$TEMP_DIR/" || cp -R "$TEMP_DIR/mount"/*.app "$TEMP_DIR/"
+
+              # Unmount the original DMG
+              hdiutil detach "$TEMP_DIR/mount" -quiet -force
+
+              # Find the app
+              APP_PATH="$TEMP_DIR/MongoDB Compass.app"
+              if [ ! -d "$APP_PATH" ]; then
+                APP_PATH=$(find "$TEMP_DIR" -name "*.app" -type d -maxdepth 1 | head -n 1)
+              fi
+
+              if [ -d "$APP_PATH" ]; then
+                echo "Ad-hoc signing: $APP_PATH"
+
+                # Sign all frameworks and helpers first
+                find "$APP_PATH" -type f \( -name "*.dylib" -o -name "*.so" \) -exec codesign --force --sign - {} \; 2>/dev/null || true
+                find "$APP_PATH/Contents/Frameworks" -type d -name "*.framework" -exec codesign --force --sign - {} \; 2>/dev/null || true
+
+                # Sign the main app bundle
+                codesign --force --deep --sign - "$APP_PATH"
+
+                # Verify signature
+                echo "Verifying signature..."
+                codesign --verify --verbose "$APP_PATH" && echo "✓ Signature verified"
+
+                # Create new DMG with signed app
+                echo "Creating new signed DMG..."
+                rm -f "$dmg"
+                hdiutil create -volname "MongoDB Compass" -srcfolder "$APP_PATH" -ov -format UDZO "$dmg"
+
+                echo "✓ Signed and repackaged: $DMG_NAME"
+              else
+                echo "Warning: Could not find app bundle"
+                ls -la "$TEMP_DIR"
+              fi
+
+              # Cleanup
+              rm -rf "$TEMP_DIR"
+            fi
+          done
+
+          echo ""
+          echo "Signed DMG files:"
+          ls -lh packages/compass/dist/*.dmg
+
+      - name: Upload DMG artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: compass-macos-arm64-dmg
+          path: packages/compass/dist/*.dmg
+          retention-days: 30
+
+  create-release:
+    name: Create GitHub Release
+    needs: [build-macos-arm64]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Extract version from tag
+        id: version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Display structure
+        run: ls -R artifacts
+
+      - name: Find DMG files
+        id: dmg
+        run: |
+          echo "Listing all DMG files:"
+          find artifacts -name "*.dmg" -type f
+
+      - name: Determine prerelease
+        id: prerelease
+        run: |
+          if [[ "${{ steps.version.outputs.version }}" =~ "beta" ]] || [[ "${{ steps.version.outputs.version }}" =~ "alpha" ]] || [[ "${{ steps.version.outputs.version }}" =~ "rc" ]]; then
+            echo "prerelease=true" >> $GITHUB_OUTPUT
+          else
+            echo "prerelease=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: MongoDB Compass ${{ steps.version.outputs.version }}
+          draft: false
+          prerelease: ${{ steps.prerelease.outputs.prerelease }}
+          generate_release_notes: true
+          files: |
+            artifacts/**/*.dmg
+          body: |
+            ## MongoDB Compass ${{ steps.version.outputs.version }}
+
+            ### Downloads
+
+            Choose the appropriate installer for your platform:
+
+            - **macOS Apple Silicon**: `arm64.dmg` file
+
+            ### Installation
+
+            Please refer to the [MongoDB Compass documentation](https://docs.mongodb.com/compass/current/install/) for installation instructions.
