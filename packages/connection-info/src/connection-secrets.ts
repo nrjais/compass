@@ -19,6 +19,7 @@ export interface ConnectionSecrets {
   proxyPassword?: string;
   autoEncryption?: AutoEncryptionOptions;
   oidcSerializedState?: string;
+  credentialGenerationCommand?: string;
 }
 
 export function mergeSecrets(
@@ -86,6 +87,14 @@ export function mergeSecrets(
       'authMechanismProperties',
       authMechanismProperties.toString()
     );
+  }
+
+  if (
+    secrets.credentialGenerationCommand &&
+    connectionInfoWithSecrets.connectionOptions.credentialGeneration
+  ) {
+    connectionInfoWithSecrets.connectionOptions.credentialGeneration.command =
+      secrets.credentialGenerationCommand;
   }
 
   connectionInfoWithSecrets.connectionOptions.connectionString = uri.href;
@@ -176,6 +185,11 @@ export function extractSecrets(connectionInfo: Readonly<ConnectionInfo>): {
   if (connectionOptions.oidc?.serializedState) {
     secrets.oidcSerializedState = connectionOptions.oidc.serializedState;
     delete connectionOptions.oidc.serializedState;
+  }
+
+  if (connectionOptions.credentialGeneration?.command) {
+    secrets.credentialGenerationCommand =
+      connectionOptions.credentialGeneration.command;
   }
 
   return { connectionInfo: connectionInfoWithoutSecrets, secrets };

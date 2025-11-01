@@ -24,6 +24,16 @@ export type UpdatePasswordAction = {
   password: string;
 };
 
+export type UpdateCredentialGenerationCommandAction = {
+  type: 'update-credential-generation-command';
+  command: string;
+};
+
+export type UpdateCredentialGenerationTTLAction = {
+  type: 'update-credential-generation-ttl';
+  ttl: number;
+};
+
 export function getConnectionUrlWithoutAuth(
   connectionStringUrl: ConnectionStringUrl
 ): ConnectionStringUrl {
@@ -168,4 +178,51 @@ export function handleUpdatePassword({
       connectionString: updatedConnectionString.toString(),
     },
   };
+}
+
+export function handleUpdateCredentialGenerationCommand({
+  action,
+  connectionOptions,
+}: {
+  action: UpdateCredentialGenerationCommandAction;
+  connectionOptions: ConnectionOptions;
+}): {
+  connectionOptions: ConnectionOptions;
+  errors?: ConnectionFormError[];
+} {
+  const updatedOptions = cloneDeep(connectionOptions);
+
+  if (action.command) {
+    if (!updatedOptions.credentialGeneration) {
+      updatedOptions.credentialGeneration = {
+        command: action.command,
+        ttl: 3600,
+      };
+    } else {
+      updatedOptions.credentialGeneration.command = action.command;
+    }
+  } else {
+    delete updatedOptions.credentialGeneration;
+  }
+
+  return { connectionOptions: updatedOptions };
+}
+
+export function handleUpdateCredentialGenerationTTL({
+  action,
+  connectionOptions,
+}: {
+  action: UpdateCredentialGenerationTTLAction;
+  connectionOptions: ConnectionOptions;
+}): {
+  connectionOptions: ConnectionOptions;
+  errors?: ConnectionFormError[];
+} {
+  const updatedOptions = cloneDeep(connectionOptions);
+
+  if (updatedOptions.credentialGeneration) {
+    updatedOptions.credentialGeneration.ttl = action.ttl;
+  }
+
+  return { connectionOptions: updatedOptions };
 }

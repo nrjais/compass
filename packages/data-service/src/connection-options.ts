@@ -47,6 +47,11 @@ export interface ConnectionOptions {
   fleOptions?: ConnectionFleOptions;
 
   /**
+   * Options for generating credentials dynamically before connection.
+   */
+  credentialGeneration?: CredentialGenerationOptions;
+
+  /**
    * Optional, a real net / tls connection callback function option that is only
    * used in Compass as a way to pass extra metadata about an Atlas cluster when
    * connecting in the browser environment through the websocket
@@ -57,6 +62,20 @@ export interface ConnectionOptions {
     clusterName?: string;
     srvAddress?: string;
   };
+}
+
+export interface CredentialGenerationOptions {
+  /**
+   * Shell command to execute to generate credentials.
+   * The command should output JSON with "username" and "password" fields.
+   */
+  command: string;
+
+  /**
+   * Time-to-live for cached credentials in seconds.
+   * Credentials will be regenerated after this time expires.
+   */
+  ttl: number;
 }
 
 export interface ConnectionFleOptions {
